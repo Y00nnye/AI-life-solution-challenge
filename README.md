@@ -1,4 +1,4 @@
-# 🏠 Safeguard AI  
+# 🏠 SafeGuard AI  
 사생활 침해 없는 1인 가구 위험 감지 시스템  
 
 카메라 없이도 1인 가구의 생활 패턴을 분석해  
@@ -103,19 +103,55 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ## (4) 실행 방법 (로컬 테스트 기준)
 
-### 1️⃣ 환경 설정
+📦 설치 및 실행 가이드 (How to Run)
+본 시스템은 Python 3.8+ 환경에서 구동됩니다. AI 서버와 대시보드를 실행하기 위해 아래 절차를 따라주세요.
 
-```bash
-# (선택) 가상환경 생성
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS / Linux
-# source venv/bin/activate
+1. 환경 설정 (Installation)
+프로젝트를 클론(Clone)하고 필수 라이브러리를 설치합니다.
 
-# 패키지 설치
+Bash
+
+# 1. 저장소 클론
+git clone https://github.com/사용자ID/SafeGuard-AI.git
+cd SafeGuard-AI/server
+
+# 2. 필수 패키지 설치
 pip install -r requirements.txt
+(requirements.txt 주요 패키지: fastapi, uvicorn, streamlit, scikit-learn, pandas)
 
+2. AI 서버 실행 (Backend)
+ESP32로부터 센서 데이터를 수신하고 AI 모델(activity_model.pkl)을 통해 위험 여부를 판단하는 FastAPI 서버를 실행합니다.
+
+Bash
+
+# server 폴더 내에서 실행
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+실행 확인: 터미널에 Application startup complete 메시지가 뜨면 성공입니다.
+
+접속 주소: http://localhost:8000 (API Docs: http://localhost:8000/docs)
+
+3. 관제 대시보드 실행 (Frontend)
+실시간 센서 데이터와 위험 감지 현황을 시각화하는 Streamlit 대시보드를 실행합니다. (새 터미널 창 사용)
+
+Bash
+
+# server 폴더 내에서 실행
+streamlit run dashboard.py
+실행 시 브라우저가 자동으로 열리며 대시보드 화면(http://localhost:8501)이 표시됩니다.
+
+4. (선택) 시뮬레이션 테스트
+하드웨어(ESP32)가 없는 환경에서도 작동을 검증할 수 있도록 가상 데이터 전송기를 제공합니다.
+
+Bash
+
+# 가짜 센서 데이터 생성 및 전송
+python test_sender.py
+실행하면 정상(Normal)과 위험(Danger) 시나리오 데이터가 번갈아 서버로 전송되며, 대시보드에서 실시간 변화를 확인할 수 있습니다.
+
+💡 팁: 하드웨어 연결 시 주의사항
+IP 주소 설정: ESP32 코드(esp32_sensor.ino) 내의 serverUrl을 서버 컴퓨터의 IP 주소(예: http://192.168.0.x:8000/predict)로 수정해야 합니다.
+
+네트워크: 서버(PC)와 ESP32는 **동일한 Wi-Fi(또는 핫스팟)**에 연결되어 있어야 통신이 가능합니다
 ---
 
 # 4. 📡 실시간 모니터링 UI  
