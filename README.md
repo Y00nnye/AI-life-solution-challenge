@@ -75,6 +75,47 @@
 **해석:**  
 > “언제, 어디에 오래 머무르는가”가 위험 판단의 핵심  
 
+## (3) 실행 파일 구성 (.py)
+
+AI 서버는 `main.py`(FastAPI) 기준으로 동작하며, 학습된 모델 파일과 같은 폴더에서 실행됩니다.
+
+- `main.py`  
+  FastAPI 기반 실시간 추론 서버  
+  (`POST /predict` 엔드포인트에서 센서 상태 JSON을 입력받아 예측 수행)
+
+- `activity_model.pkl`  
+  RandomForest 학습 모델 (AI_life_pattern_7days에서 저장한 모델)
+
+- `scaler.pkl` (사용했다면)  
+  학습 시 사용한 StandardScaler 등 전처리 객체
+
+- `dashboard.py`  
+  `realtime_log.csv`를 1초 단위로 읽어 실시간 상태를 보여주는 Streamlit 대시보드
+
+- `requirements.txt`  
+  FastAPI, scikit-learn, pandas, streamlit 등 프로젝트에 필요한 파이썬 패키지 목록
+
+  - AI 서버 진행
+uvicorn main:app --host 0.0.0.0 --port 8000
+
+
+---
+
+## (4) 실행 방법 (로컬 테스트 기준)
+
+### 1️⃣ 환경 설정
+
+```bash
+# (선택) 가상환경 생성
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# macOS / Linux
+# source venv/bin/activate
+
+# 패키지 설치
+pip install -r requirements.txt
+
 ---
 
 # 4. 📡 실시간 모니터링 UI  
