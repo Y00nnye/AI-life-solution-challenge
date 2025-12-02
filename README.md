@@ -95,7 +95,7 @@ AI 서버는 `main.py`(FastAPI) 기준으로 동작하며, 학습된 모델 파�
 - `requirements.txt`  
   FastAPI, scikit-learn, pandas, streamlit 등 프로젝트에 필요한 파이썬 패키지 목록
 
-  - AI 서버 진행
+- AI 서버 진행
 uvicorn main:app --host 0.0.0.0 --port 8000
 
 
