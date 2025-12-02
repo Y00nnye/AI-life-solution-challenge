@@ -1,0 +1,168 @@
+#define BLYNK_TEMPLATE_ID   "TMPL6JM2_AhKX"
+#define BLYNK_TEMPLATE_NAME "userphone"
+#define BLYNK_AUTH_TOKEN    "AqubQU_hpDC-C6nG8GzSI2-uQEa55lT0"
+
+#include <WiFi.h>
+#include <esp_now.h>
+#include <BlynkSimpleEsp32.h>
+
+// ======== Blynk 설정 ========
+char auth[] = BLYNK_AUTH_TOKEN;
+char ssid[] = "SK_FB22";
+char pass[] = "CKK2A@7626";
+
+// ======== 센서 노드 → 허브 구조와 동일해야 함 ========
+typedef struct __attribute__((packed)) {
+  uint8_t  nodeId;    // 노드 번호 (1~6)
+  uint16_t fsrRaw;    // 센서 raw 값 (ADC)
+  uint8_t  isSeated;  // (노드에서 오던 값, 지금은 참고용)
+} FsrPayload;
+
+// ======== 임계값 / 상태 관리 ========
+const int NUM_NODES = 6;
+
+// nodeId 1~6에 대한 임계값 (원하면 센서별로 다르게 조정 가능)
+int FSR_THRESHOLD[NUM_NODES + 1] = {
+  0,    // 0번은 안 씀
+  600,  // node 1
+  600,  // node 2
+  600,  // node 3
+  600,  // node 4
+  600,  // node 5
+  600   // node 6
+};
+
+// 각 노드 위험 상태 저장
+bool nodeDanger[NUM_NODES + 1] = { false };
+
+// 전체 상태 표시용 V핀
+const int VPIN_GLOBAL_STATE = V19;  // 전체 상태 (0/1)
+const int VPIN_OK_BUTTON    = V20;  // 괜찮아요
+const int VPIN_ALERT_BUTTON = V21;  // 신고가 필요해요
+
+// ======== 전체 위험 상태 업데이트 ========
+void updateGlobalDanger() {
+  bool anyDanger = false;
+  for (int i = 1; i <= NUM_NODES; i++) {
+    if (nodeDanger[i]) {
+      anyDanger = true;
+      break;
+    }
+  }
+  // V19에 전체 상태 쓰기 (0=정상, 1=위험)
+  Blynk.virtualWrite(VPIN_GLOBAL_STATE, anyDanger ? 1 : 0);
+}
+
+// ======== ESP-NOW 수신 콜백 ========
+void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
+  FsrPayload data;
+
+  if (len == sizeof(FsrPayload)) {
+    memcpy(&data, incomingData, sizeof(FsrPayload));
+
+    // MAC 표시(디버깅용)
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr),
+             "%02X:%02X:%02X:%02X:%02X:%02X",
+             info->src_addr[0], info->src_addr[1], info->src_addr[2],
+             info->src_addr[3], info->src_addr[4], info->src_addr[5]);
+
+    Serial.print("[FROM ");
+    Serial.print(macStr);
+    Serial.print("] Node ");
+    Serial.print(data.nodeId);
+    Serial.print(" | FSR=");
+    Serial.print(data.fsrRaw);
+    Serial.print(" | isSeated(노드측)=");
+    Serial.println(data.isSeated ? "YES" : "NO");
+
+    if (data.nodeId < 1 || data.nodeId > NUM_NODES) {
+      Serial.println("Invalid nodeId, ignore.");
+      return;
+    }
+
+    // ======= 허브에서 임계값 판정 =======
+    int threshold = FSR_THRESHOLD[data.nodeId];
+    bool isDanger = (data.fsrRaw > threshold);  // 임계값 넘으면 위험(1)
+
+    nodeDanger[data.nodeId] = isDanger;
+
+    // ---- Blynk로 전송 ----
+    // 노드 번호 별로 다른 핀에 기록 (예: node1=V1, node2=V2 ...)
+    int vpin_led = data.nodeId;  // nodeId 1 → V1, 2 → V2 ...
+
+    // LED 위젯에는 0/1만 보냄
+    Blynk.virtualWrite(vpin_led, isDanger ? 1 : 0);
+
+    // (원하면 raw값을 다른 그래프용 V핀에 보내도 됨, 예: V10+nodeId)
+    // Blynk.virtualWrite(10 + data.nodeId, data.fsrRaw);
+
+    // 전체 위험 상태 갱신
+    updateGlobalDanger();
+
+    Serial.print("  --> threshold=");
+    Serial.print(threshold);
+    Serial.print(" | isDanger=");
+    Serial.println(isDanger ? "1(위험)" : "0(정상)");
+  }
+}
+
+// ======== "괜찮아요" 버튼 (V20) ========
+BLYNK_WRITE(V20) {
+  int val = param.asInt();
+  if (val == 1) {   // 버튼 눌렸을 때
+    Serial.println("[USER] 괜찮아요 버튼 눌림");
+
+    // 모든 노드 상태 정상으로 리셋
+    for (int i = 1; i <= NUM_NODES; i++) {
+      nodeDanger[i] = false;
+      Blynk.virtualWrite(i, 0);   // V1~V6 LED 모두 끄기
+    }
+    updateGlobalDanger();
+
+    // 버튼 스위치 다시 0으로 내려주기 (토글/스위치일 때)
+    Blynk.virtualWrite(V20, 0);
+  }
+}
+
+// ======== "신고가 필요해요" 버튼 (V21) ========
+BLYNK_WRITE(V21) {
+  int val = param.asInt();
+  if (val == 1) {
+    Serial.println("[USER] 신고가 필요해요 버튼 눌림");
+
+    // 여기서 나중에: Blynk 이벤트, URL, 전화번호 표시 등 구현 가능
+    // 예: Blynk.logEvent("user_danger", "사용자가 신고 버튼을 눌렀습니다.");
+
+    // 버튼 스위치 다시 0으로
+    Blynk.virtualWrite(V21, 0);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  // 1) Blynk WiFi 연결
+  Serial.println("Connecting to Blynk...");
+  Blynk.begin(auth, ssid, pass);
+  Serial.println("Blynk connected!");
+
+  // 2) ESP-NOW 초기화
+  WiFi.mode(WIFI_STA);
+  Serial.print("Hub MAC: ");
+  Serial.println(WiFi.macAddress());
+
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW init failed!");
+    while (1) delay(1000);
+  }
+
+  esp_now_register_recv_cb(OnDataRecv);
+
+  Serial.println("Hub ready. Waiting for sensor data...");
+}
+
+void loop() {
+  Blynk.run();    // Blynk 처리 루프
+}
